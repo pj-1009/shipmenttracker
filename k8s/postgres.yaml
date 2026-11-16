@@ -1,0 +1,67 @@
+# PostgreSQL for shipmenttracker. Local development only: the password below
+# is not a secret. Use a real secret store before running anywhere shared.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres
+  namespace: shipmenttracker
+type: Opaque
+stringData:
+  POSTGRES_DB: shipments
+  POSTGRES_USER: shipments
+  POSTGRES_PASSWORD: shipments
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: shipmenttracker
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: shipmenttracker
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
